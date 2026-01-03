@@ -232,10 +232,22 @@ async def review_pr(
 
 
 def main() -> None:
-    """Run the MCP server."""
+    """Run the MCP server.
+
+    Defaults to stdio transport for Docker MCP Toolkit compatibility.
+    Set MCP_TRANSPORT=http to run as HTTP server.
+    """
+    import os
+
     mode_info = "github.com" if settings.is_github_com else f"GHES ({settings.ghes_hostname})"
-    print(f"Starting GitHub PR Reviewer in {mode_info} mode...")
-    mcp.run(transport="http", host="0.0.0.0", port=settings.mcp_server_port)
+    transport = os.environ.get("MCP_TRANSPORT", "stdio")
+
+    if transport == "http":
+        print(f"Starting GitHub PR Reviewer in {mode_info} mode (HTTP)...")
+        mcp.run(transport="http", host="0.0.0.0", port=settings.mcp_server_port)
+    else:
+        # stdio for Docker MCP Toolkit
+        mcp.run(transport="stdio")
 
 
 if __name__ == "__main__":

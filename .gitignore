@@ -151,6 +151,8 @@ cython_debug/
 .project
 .pydevproject
 .settings/
+CLAUDE_DESKTOP.md
+CLAUDE.md
 *.sublime-project
 *.sublime-workspace
 
