@@ -186,7 +186,14 @@ class GitHubClient:
                 json=payload,
                 timeout=60.0,
             )
-            if response.status_code == 422:
+            if response.status_code == 401:
+                raise ValueError("GitHub authentication failed. Check your token.")
+            elif response.status_code == 403:
+                error_data = response.json()
+                if "rate limit" in error_data.get("message", "").lower():
+                    raise ValueError("GitHub API rate limit exceeded. Try again later.")
+                raise ValueError(f"GitHub API access denied: {error_data.get('message', 'Unknown error')}")
+            elif response.status_code == 422:
                 # GitHub validation error - show details
                 error_data = response.json()
                 error_msg = error_data.get("message", "Unknown error")

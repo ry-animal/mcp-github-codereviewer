@@ -25,6 +25,9 @@ def parse_github_url(url_or_repo: str) -> tuple[str, str, int | None]:
     Returns:
         Tuple of (owner, repo, pr_number or None)
     """
+    if len(url_or_repo) > 500:  # Reasonable limit for GitHub URLs
+        raise ValueError(f"Input too long: {len(url_or_repo)} characters")
+
     # Full URL pattern: https://github.com/owner/repo/pull/123
     url_pattern = r"(?:https?://)?(?:www\.)?github\.com/([^/]+)/([^/]+)/pull/(\d+)"
     match = re.match(url_pattern, url_or_repo)
@@ -51,6 +54,10 @@ def parse_github_url(url_or_repo: str) -> tuple[str, str, int | None]:
 
 async def list_prs_cmd(owner: str, repo: str, state: str = "open") -> None:
     """List pull requests in a repository."""
+    if not settings.github_token:
+        print("Error: GitHub token not configured. Set GITHUB_TOKEN environment variable.")
+        sys.exit(1)
+
     client = GitHubClient(token=settings.github_token, mode="github.com")
     prs = await client.list_pull_requests(owner, repo, state)
 
@@ -74,6 +81,13 @@ async def review_pr_cmd(
     focus: list[str] | None = None,
 ) -> None:
     """Review a pull request with AI."""
+    if not settings.github_token:
+        print("Error: GitHub token not configured. Set GITHUB_TOKEN environment variable.")
+        sys.exit(1)
+    if not settings.openrouter_api_key:
+        print("Error: OpenRouter API key not configured. Set OPENROUTER_API_KEY environment variable.")
+        sys.exit(1)
+
     gh_client = GitHubClient(token=settings.github_token, mode="github.com")
     ai_client = OpenRouterClient(settings.openrouter_api_key)
 
@@ -134,9 +148,9 @@ async def review_pr_cmd(
             )
             print(f"Review posted: {response.html_url}")
         except ValueError as e:
-            error_str = str(e)
-            # Handle "can't approve your own PR" error
-            if "approve your own" in error_str.lower():
+            error_str = str(e).lower()
+            # Handle "can't approve/request changes on your own PR" error
+            if "your own" in error_str and ("approve" in error_str or "request changes" in error_str):
                 print(f"\nNote: Can't {result.decision.value} your own PR - posting as COMMENT instead")
                 from mcp_gh_reviewer.models.review import ReviewAction
                 result.decision = ReviewAction.COMMENT
@@ -149,7 +163,7 @@ async def review_pr_cmd(
                 )
                 print(f"Review posted: {response.html_url}")
             # Handle invalid line positions
-            elif "position" in error_str.lower() or "line" in error_str.lower():
+            elif "position" in error_str or "line" in error_str:
                 print(f"\nError with inline comments: {e}")
                 print("Retrying without inline comments...")
                 result.inline_comments = []
@@ -162,7 +176,11 @@ async def review_pr_cmd(
                 )
                 print(f"Review posted (summary only): {response.html_url}")
             else:
-                raise
+                print(f"\nError posting review: {e}")
+                sys.exit(1)
+        except Exception as e:
+            print(f"\nUnexpected error posting review: {e}")
+            sys.exit(1)
     else:
         print("\n(Use --post to submit this review to GitHub)")
 

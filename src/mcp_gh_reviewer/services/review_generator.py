@@ -203,7 +203,11 @@ Please review this pull request and provide your analysis."""
         brace_match = re.search(r"\{[\s\S]*\}", response)
         if brace_match:
             try:
-                return json.loads(brace_match.group(0))
+                parsed = json.loads(brace_match.group(0))
+                # Validate required fields exist
+                required_fields = ['summary', 'decision', 'confidence', 'key_issues', 'inline_comments']
+                if all(field in parsed for field in required_fields):
+                    return parsed
             except json.JSONDecodeError:
                 pass
 
