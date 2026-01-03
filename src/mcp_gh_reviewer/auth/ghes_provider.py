@@ -12,16 +12,25 @@ class GHESTokenVerifier:
     Verifies OAuth tokens by calling the GHES /user endpoint.
     """
 
-    def __init__(self, ghes_hostname: str):
+    def __init__(
+        self,
+        ghes_hostname: str,
+        required_scopes: list[str] | None = None,
+        timeout_seconds: int = 30,
+    ):
         """Initialize the token verifier.
 
         Args:
             ghes_hostname: GHES hostname (e.g., "github.mycompany.com")
+            required_scopes: Scopes required for access
+            timeout_seconds: HTTP request timeout
         """
         self.ghes_hostname = ghes_hostname
         self.api_base = f"https://{ghes_hostname}/api/v3"
+        self.required_scopes = required_scopes or []
+        self.timeout_seconds = timeout_seconds
 
-    async def verify(self, token: str) -> dict:
+    async def verify_token(self, token: str) -> dict:
         """Verify token by calling GHES user endpoint.
 
         Args:
@@ -37,7 +46,7 @@ class GHESTokenVerifier:
             response = await client.get(
                 f"{self.api_base}/user",
                 headers={"Authorization": f"Bearer {token}"},
-                timeout=30.0,
+                timeout=float(self.timeout_seconds),
             )
             response.raise_for_status()
             user_data = response.json()
@@ -47,6 +56,23 @@ class GHESTokenVerifier:
                 "name": user_data.get("name"),
                 "email": user_data.get("email"),
             }
+
+    # Required stubs for AuthProvider interface
+    def get_middleware(self):
+        """Return auth middleware (handled by OAuthProxy)."""
+        return None
+
+    def get_routes(self):
+        """Return auth routes (handled by OAuthProxy)."""
+        return []
+
+    def get_well_known_routes(self):
+        """Return well-known routes (handled by OAuthProxy)."""
+        return []
+
+    def set_mcp_path(self, path: str):
+        """Set MCP path (handled by OAuthProxy)."""
+        pass
 
 
 class GHESProvider(OAuthProxy):
@@ -82,10 +108,13 @@ class GHESProvider(OAuthProxy):
             upstream_token_endpoint=f"https://{ghes_hostname}/login/oauth/access_token",
             upstream_client_id=client_id,
             upstream_client_secret=client_secret,
-            token_verifier=GHESTokenVerifier(ghes_hostname),
+            token_verifier=GHESTokenVerifier(
+                ghes_hostname=ghes_hostname,
+                required_scopes=default_scopes,
+            ),
             base_url=base_url,
             redirect_path=redirect_path,
-            required_scopes=default_scopes,
+            valid_scopes=default_scopes,
             forward_pkce=True,  # GitHub supports PKCE
             token_endpoint_auth_method="client_secret_post",
         )

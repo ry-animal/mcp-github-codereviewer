@@ -1,10 +1,12 @@
-"""FastMCP server for AI-powered GitHub PR code reviews."""
+"""FastMCP server for AI-powered GitHub PR code reviews.
+
+Supports both github.com (PAT auth) and GitHub Enterprise Server (OAuth).
+"""
 
 from typing import Optional
 
 from fastmcp import Context, FastMCP
 
-from mcp_gh_reviewer.auth.ghes_provider import GHESProvider
 from mcp_gh_reviewer.clients.github_client import GitHubClient
 from mcp_gh_reviewer.clients.openrouter_client import OpenRouterClient
 from mcp_gh_reviewer.config import settings
@@ -14,29 +16,57 @@ from mcp_gh_reviewer.services.diff_parser import DiffParser
 from mcp_gh_reviewer.services.review_generator import ReviewGenerator
 from mcp_gh_reviewer.services.review_poster import ReviewPoster
 
-# Initialize OAuth provider for GHES
-auth_provider = GHESProvider(
-    client_id=settings.github_client_id,
-    client_secret=settings.github_client_secret,
-    base_url=settings.mcp_server_base_url,
-    ghes_hostname=settings.ghes_hostname,
-)
 
-mcp = FastMCP(
-    name="GitHub PR Reviewer",
-    description="AI-powered code review for GitHub Enterprise Server PRs",
-    auth=auth_provider,
-)
+def _create_mcp_server() -> FastMCP:
+    """Create the MCP server based on configuration mode."""
+    if settings.is_github_com:
+        # github.com mode: No OAuth, uses PAT from config
+        return FastMCP(
+            name="GitHub PR Reviewer",
+            instructions="AI-powered code review for GitHub PRs (github.com mode)",
+        )
+    else:
+        # GHES mode: Use OAuth
+        from mcp_gh_reviewer.auth.ghes_provider import GHESProvider
+
+        auth_provider = GHESProvider(
+            client_id=settings.github_client_id,
+            client_secret=settings.github_client_secret,
+            base_url=settings.mcp_server_base_url,
+            ghes_hostname=settings.ghes_hostname,
+        )
+        return FastMCP(
+            name="GitHub PR Reviewer",
+            instructions="AI-powered code review for GitHub Enterprise Server PRs",
+            auth=auth_provider,
+        )
 
 
-def _get_token(ctx: Optional[Context]) -> Optional[str]:
-    """Extract OAuth token from context if available."""
-    if ctx is None:
-        return None
-    try:
-        return ctx.get_access_token()
-    except Exception:
-        return None
+# Create the server
+mcp = _create_mcp_server()
+
+
+def _get_github_client(ctx: Optional[Context]) -> GitHubClient:
+    """Create a GitHub client based on mode and context."""
+    if settings.is_github_com:
+        # Use PAT from settings
+        return GitHubClient(
+            token=settings.github_token,
+            mode="github.com",
+        )
+    else:
+        # Use OAuth token from context for GHES
+        token = None
+        if ctx is not None:
+            try:
+                token = ctx.get_access_token()
+            except Exception:
+                pass
+        return GitHubClient(
+            hostname=settings.ghes_hostname,
+            token=token,
+            mode="ghes",
+        )
 
 
 @mcp.tool
@@ -56,8 +86,7 @@ async def list_prs(
     Returns:
         List of pull requests with basic metadata
     """
-    token = _get_token(ctx)
-    client = GitHubClient(settings.ghes_hostname, token)
+    client = _get_github_client(ctx)
     return await client.list_pull_requests(owner, repo, state)
 
 
@@ -78,8 +107,7 @@ async def get_pr_diff(
     Returns:
         Unified diff as a string
     """
-    token = _get_token(ctx)
-    client = GitHubClient(settings.ghes_hostname, token)
+    client = _get_github_client(ctx)
     return await client.get_pull_request_diff(owner, repo, pr_number)
 
 
@@ -100,8 +128,7 @@ async def get_pr_files(
     Returns:
         List of changed files with stats and patches
     """
-    token = _get_token(ctx)
-    client = GitHubClient(settings.ghes_hostname, token)
+    client = _get_github_client(ctx)
     return await client.get_pull_request_files(owner, repo, pr_number)
 
 
@@ -122,8 +149,7 @@ async def get_pr(
     Returns:
         Pull request details including title, body, author, and branch info
     """
-    token = _get_token(ctx)
-    client = GitHubClient(settings.ghes_hostname, token)
+    client = _get_github_client(ctx)
     return await client.get_pull_request(owner, repo, pr_number)
 
 
@@ -155,10 +181,7 @@ async def review_pr(
     Returns:
         AI review result with summary, decision, and inline comments
     """
-    token = _get_token(ctx)
-
-    # Initialize clients
-    gh_client = GitHubClient(settings.ghes_hostname, token)
+    gh_client = _get_github_client(ctx)
     ai_client = OpenRouterClient(settings.openrouter_api_key)
 
     # Fetch PR data
@@ -210,6 +233,8 @@ async def review_pr(
 
 def main() -> None:
     """Run the MCP server."""
+    mode_info = "github.com" if settings.is_github_com else f"GHES ({settings.ghes_hostname})"
+    print(f"Starting GitHub PR Reviewer in {mode_info} mode...")
     mcp.run(transport="http", host="0.0.0.0", port=settings.mcp_server_port)
 
 

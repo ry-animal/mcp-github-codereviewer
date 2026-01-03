@@ -1,6 +1,6 @@
-"""Client for GitHub Enterprise Server API."""
+"""Client for GitHub API (supports both github.com and GHES)."""
 
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 import httpx
 
@@ -13,16 +13,28 @@ from mcp_gh_reviewer.models.review import ReviewResponse
 
 
 class GitHubClient:
-    """Client for GitHub Enterprise Server API."""
+    """Client for GitHub API (supports both github.com and GHES)."""
 
-    def __init__(self, hostname: str, token: Optional[str] = None):
+    def __init__(
+        self,
+        hostname: Optional[str] = None,
+        token: Optional[str] = None,
+        mode: Literal["github.com", "ghes"] = "github.com",
+    ):
         """Initialize the GitHub client.
 
         Args:
-            hostname: GHES hostname (e.g., "github.mycompany.com")
-            token: OAuth access token for authentication
+            hostname: GHES hostname (e.g., "github.mycompany.com"), ignored for github.com
+            token: Access token (PAT for github.com, OAuth for GHES)
+            mode: "github.com" or "ghes"
         """
-        self.base_url = f"https://{hostname}/api/v3"
+        self.mode = mode
+        if mode == "github.com":
+            self.base_url = "https://api.github.com"
+        else:
+            if not hostname:
+                raise ValueError("hostname is required for GHES mode")
+            self.base_url = f"https://{hostname}/api/v3"
         self.token = token
 
     def _headers(self, accept: str = "application/vnd.github+json") -> dict[str, str]:
