@@ -60,7 +60,7 @@ class TestGitHubMCPProviderIntegration:
         if not real_github_token:
             pytest.skip("No GitHub token available")
 
-        provider = GitHubMCPProvider(github_token=real_github_token)
+        provider = GitHubMCPProvider(github_token=real_github_token.value)
         prs = await provider.list_prs("octocat", "Hello-World", state="all")
 
         assert isinstance(prs, list)
@@ -72,7 +72,7 @@ class TestGitHubMCPProviderIntegration:
         if not real_github_token:
             pytest.skip("No GitHub token available")
 
-        provider = GitHubMCPProvider(github_token=real_github_token)
+        provider = GitHubMCPProvider(github_token=real_github_token.value)
 
         try:
             pr = await provider.get_pr("jlowin", "fastmcp", 1)
@@ -89,7 +89,7 @@ class TestGitHubMCPProviderIntegration:
         if not real_github_token:
             pytest.skip("No GitHub token available")
 
-        provider = GitHubMCPProvider(github_token=real_github_token)
+        provider = GitHubMCPProvider(github_token=real_github_token.value)
 
         try:
             diff = await provider.get_pr_diff("jlowin", "fastmcp", 1)
@@ -106,7 +106,7 @@ class TestGitHubMCPProviderIntegration:
         if not real_github_token:
             pytest.skip("No GitHub token available")
 
-        provider = GitHubMCPProvider(github_token=real_github_token)
+        provider = GitHubMCPProvider(github_token=real_github_token.value)
 
         try:
             files = await provider.get_pr_files("jlowin", "fastmcp", 1)
