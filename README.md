@@ -35,7 +35,8 @@ uv sync
 # Copy and configure environment
 cp .env.example .env
 # Edit .env with your tokens
-```
+git clone https://github.com/ry-animal/mcp-github-codereviewer.git
+cd mcp-github-codereviewer
 
 ### Basic Usage
 
