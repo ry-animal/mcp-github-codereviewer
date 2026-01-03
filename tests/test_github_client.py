@@ -86,7 +86,7 @@ class TestGitHubClientIntegration:
         if not real_github_token:
             pytest.skip("No GitHub token available")
 
-        client = GitHubClient(token=real_github_token, mode="github.com")
+        client = GitHubClient(token=real_github_token.value, mode="github.com")
 
         # Use a well-known public repo with PRs
         prs = await client.list_pull_requests("octocat", "Hello-World", state="all")
@@ -105,7 +105,7 @@ class TestGitHubClientIntegration:
         if not real_github_token:
             pytest.skip("No GitHub token available")
 
-        client = GitHubClient(token=real_github_token, mode="github.com")
+        client = GitHubClient(token=real_github_token.value, mode="github.com")
 
         # Use a repo we know has PRs - the fastmcp repo
         try:
@@ -127,7 +127,7 @@ class TestGitHubClientIntegration:
         if not real_github_token:
             pytest.skip("No GitHub token available")
 
-        client = GitHubClient(token=real_github_token, mode="github.com")
+        client = GitHubClient(token=real_github_token.value, mode="github.com")
 
         try:
             diff = await client.get_pull_request_diff("jlowin", "fastmcp", 1)
@@ -147,7 +147,7 @@ class TestGitHubClientIntegration:
         if not real_github_token:
             pytest.skip("No GitHub token available")
 
-        client = GitHubClient(token=real_github_token, mode="github.com")
+        client = GitHubClient(token=real_github_token.value, mode="github.com")
 
         try:
             files = await client.get_pull_request_files("jlowin", "fastmcp", 1)

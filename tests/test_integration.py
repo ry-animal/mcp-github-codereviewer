@@ -28,7 +28,7 @@ class TestEndToEndGitHubCom:
         if not real_github_token:
             pytest.skip("No GitHub token available")
 
-        client = GitHubClient(token=real_github_token, mode="github.com")
+        client = GitHubClient(token=real_github_token.value, mode="github.com")
         parser = DiffParser()
 
         # Find a repo with open PRs - let's try anthropics/anthropic-sdk-python
@@ -87,7 +87,7 @@ class TestEndToEndGitHubCom:
         if not real_github_token:
             pytest.skip("No GitHub token available")
 
-        client = GitHubClient(token=real_github_token, mode="github.com")
+        client = GitHubClient(token=real_github_token.value, mode="github.com")
         parser = DiffParser()
 
         # Use a repo we know has merged PRs with diffs
@@ -155,7 +155,7 @@ class TestReviewGeneratorIntegration:
         from mcp_gh_reviewer.clients.openrouter_client import OpenRouterClient
         from mcp_gh_reviewer.services.review_generator import ReviewGenerator
 
-        client = GitHubClient(token=real_github_token, mode="github.com")
+        client = GitHubClient(token=real_github_token.value, mode="github.com")
         ai_client = OpenRouterClient(settings.openrouter_api_key)
         parser = DiffParser()
 
@@ -193,12 +193,17 @@ class TestReviewGeneratorIntegration:
 
                 # Generate review
                 generator = ReviewGenerator(ai_client, settings.review_model)
-                result = await generator.generate_review(
-                    pr=pr,
-                    diff=diff,
-                    files=files,
-                    parsed_diff=parsed_diff,
-                )
+                try:
+                    result = await generator.generate_review(
+                        pr=pr,
+                        diff=diff,
+                        files=files,
+                        parsed_diff=parsed_diff,
+                    )
+                except Exception as e:
+                    if "402" in str(e):
+                        pytest.skip("OpenRouter requires payment - insufficient credits")
+                    raise
 
                 # Verify result structure
                 assert result.summary
@@ -214,4 +219,6 @@ class TestReviewGeneratorIntegration:
         except Exception as e:
             if "404" in str(e) or "403" in str(e):
                 pytest.skip(f"Could not access repo: {e}")
+            if "402" in str(e):
+                pytest.skip("OpenRouter requires payment - insufficient credits")
             raise
