@@ -19,7 +19,15 @@ Your review should:
 1. Identify bugs, security issues, and logic errors
 2. Suggest improvements for code quality and maintainability
 3. Note any missing tests or documentation
-4. Highlight good patterns worth preserving
+
+IMPORTANT: Only create inline_comments for ACTIONABLE feedback. Each comment MUST include:
+- A specific problem or improvement opportunity
+- A concrete code suggestion showing how to fix/improve it
+
+DO NOT create comments that:
+- Only praise the code ("Good job!", "Nice pattern!")
+- State observations without suggestions ("This handles errors")
+- Lack specific code examples
 
 Output your review as JSON matching this schema:
 {
@@ -31,10 +39,23 @@ Output your review as JSON matching this schema:
     {
       "path": "relative/file/path.py",
       "line": 42,
-      "body": "Comment text with suggestion",
-      "severity": "critical" | "warning" | "suggestion" | "praise"
+      "body": "Problem description.\\n\\nSuggested fix:\\n```python\\n# code example here\\n```"
     }
   ]
+}
+
+Example of a GOOD inline comment:
+{
+  "path": "src/client.py",
+  "line": 45,
+  "body": "This catches all exceptions which may hide bugs. Consider catching specific exceptions.\\n\\nSuggested fix:\\n```python\\ntry:\\n    response = await client.post(url)\\nexcept httpx.TimeoutException:\\n    logger.warning('Request timed out')\\n    raise\\nexcept httpx.HTTPStatusError as e:\\n    logger.error(f'HTTP error: {e.response.status_code}')\\n    raise\\n```"
+}
+
+Example of a BAD inline comment (don't do this):
+{
+  "path": "src/client.py",
+  "line": 45,
+  "body": "Good error handling pattern here!"
 }
 
 Guidelines:
@@ -42,8 +63,8 @@ Guidelines:
 - Use APPROVE if changes are good or only have minor suggestions
 - Use COMMENT for neutral observations
 - Line numbers must refer to the NEW file (right side of diff)
-- Be constructive and specific in feedback
-- Keep inline comments concise but actionable
+- Fewer high-quality comments are better than many low-quality ones
+- If code is good and needs no changes, return empty inline_comments array
 """
 
 
@@ -174,7 +195,19 @@ Please review this pull request and provide your analysis."""
         json_match = re.search(r"```(?:json)?\s*([\s\S]*?)```", response)
         if json_match:
             try:
-                return json.loads(json_match.group(1))
+                return json.loads(json_match.group(1).strip())
+            except json.JSONDecodeError:
+                pass
+
+        # Try to find JSON object in response (starts with { ends with })
+        brace_match = re.search(r"\{[\s\S]*\}", response)
+        if brace_match:
+            try:
+                parsed = json.loads(brace_match.group(0))
+                # Validate required fields exist
+                required_fields = ['summary', 'decision', 'confidence', 'key_issues', 'inline_comments']
+                if all(field in parsed for field in required_fields):
+                    return parsed
             except json.JSONDecodeError:
                 pass
 
