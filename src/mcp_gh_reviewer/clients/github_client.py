@@ -174,16 +174,27 @@ class GitHubClient:
             Review response with ID and URL
         """
         async with httpx.AsyncClient() as client:
+            payload = {
+                "commit_id": commit_id,
+                "event": event,
+                "body": body,
+                "comments": comments,
+            }
             response = await client.post(
                 f"{self.base_url}/repos/{owner}/{repo}/pulls/{pr_number}/reviews",
                 headers=self._headers(),
-                json={
-                    "commit_id": commit_id,
-                    "event": event,
-                    "body": body,
-                    "comments": comments,
-                },
+                json=payload,
                 timeout=60.0,
             )
+            if response.status_code == 422:
+                # GitHub validation error - show details
+                error_data = response.json()
+                error_msg = error_data.get("message", "Unknown error")
+                errors = error_data.get("errors", [])
+                detail = f"GitHub API error: {error_msg}"
+                if errors:
+                    detail += f"\nErrors: {errors}"
+                detail += f"\nComments sent: {len(comments)}"
+                raise ValueError(detail)
             response.raise_for_status()
             return ReviewResponse.model_validate(response.json())
