@@ -1,0 +1,30 @@
+[project]
+name = "mcp-gh-reviewer"
+version = "0.1.0"
+description = "AI-powered code review MCP server for GitHub Enterprise"
+readme = "README.md"
+authors = [
+    { name = "Ryan Van Valkenburg", email = "Ryan.Van.Valkenburg.-ND@disney.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "fastmcp>=2.14.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "httpx>=0.27.0",
+    "unidiff>=0.7.5",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-httpx>=0.30.0",
+]
+
+[project.scripts]
+mcp-gh-reviewer = "mcp_gh_reviewer.server:main"
+
+[build-system]
+requires = ["uv_build>=0.9.10,<0.10.0"]
+build-backend = "uv_build"
