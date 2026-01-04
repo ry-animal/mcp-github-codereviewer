@@ -6,6 +6,7 @@ AI-powered GitHub PR code review tool with CLI and MCP server modes. Uses Claude
 
 - **AI-Powered Reviews**: Generates detailed code reviews using Claude models via OpenRouter
 - **Inline Comments**: Posts contextual comments directly on changed lines with code suggestions
+- **Pre-Commit Hook**: Review staged changes before every commit (advisory mode)
 - **Dual Mode Operation**:
   - **CLI** (`gh-review`): Standalone command-line tool for quick reviews
   - **MCP Server** (`mcp-gh-reviewer`): FastMCP server for Claude Desktop integration
@@ -88,6 +89,85 @@ Any model available on [OpenRouter](https://openrouter.ai/models) can be used. R
 - `anthropic/claude-sonnet-4` (default, best balance of speed/quality)
 - `anthropic/claude-opus-4` (highest quality)
 - `anthropic/claude-3.5-sonnet` (fast, cost-effective)
+
+## Pre-Commit Hook
+
+Review staged changes with AI before every commit. The hook runs in advisory mode - it shows the review and lets you decide whether to proceed.
+
+### Installation
+
+```bash
+# Install the pre-commit hook
+uv run install-review-hook
+
+# Uninstall
+uv run install-review-hook --uninstall
+```
+
+### How It Works
+
+```
+git commit
+    │
+    ▼
+┌─────────────────────────────────────┐
+│  1. Get staged diff                 │
+│  2. AI reviews changes              │
+│  3. Display results with issues     │
+│  4. Prompt: "Proceed? [y/N]"        │
+└─────────────────────────────────────┘
+    │
+    ├── y → commit proceeds
+    └── N → commit aborted
+```
+
+### Example Output
+
+```
+Reviewing staged changes...
+Found 2 files with +45/-12 lines
+
+──────────────────────────────────────────────────
+Review Summary
+──────────────────────────────────────────────────
+Decision: COMMENT (confidence: 85%)
+
+Changes add input validation to the user handler.
+
+Key Issues
+──────────────────────────────────────────────────
+  * Consider adding error handling for edge cases
+
+Inline Comments (1)
+──────────────────────────────────────────────────
+src/handlers/user.py:45
+  Consider adding a try/catch here:
+
+  ```python
+  try:
+      user = get_user(user_id)
+  except UserNotFoundError:
+      return None
+  ```
+
+──────────────────────────────────────────────────
+
+Proceed with commit? [y/N]:
+```
+
+### Manual Review
+
+Run the review without committing:
+
+```bash
+uv run review-staged
+```
+
+### Skipping the Hook
+
+```bash
+git commit --no-verify
+```
 
 ## CLI Usage
 
@@ -297,8 +377,11 @@ src/mcp_gh_reviewer/
 ├── models/         # Pydantic data models
 ├── providers/      # Abstract data provider interface
 ├── services/       # Business logic (diff parsing, review generation, posting)
+│   └── staged_reviewer.py  # Staged changes review service
 ├── cli.py          # CLI entry point
 ├── server.py       # MCP server entry point
+├── pre_commit.py   # Pre-commit hook entry point
+├── install_hook.py # Hook installer/uninstaller
 └── config.py       # Centralized configuration
 ```
 

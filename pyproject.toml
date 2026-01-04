@@ -25,6 +25,8 @@ dev = [
 [project.scripts]
 mcp-gh-reviewer = "mcp_gh_reviewer.server:main"
 gh-review = "mcp_gh_reviewer.cli:main"
+review-staged = "mcp_gh_reviewer.pre_commit:main"
+install-review-hook = "mcp_gh_reviewer.install_hook:main"
 
 [build-system]
 requires = ["uv_build>=0.9.10,<0.10.0"]
