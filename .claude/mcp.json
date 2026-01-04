@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "github-pr-review": {
+      "command": "uv",
+      "args": ["run", "mcp-gh-reviewer"],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "GITHUB_MODE": "github.com",
+        "GITHUB_TOKEN": "${GITHUB_TOKEN}",
+        "OPENROUTER_API_KEY": "${OPENROUTER_API_KEY}",
+        "REVIEW_MODEL": "anthropic/claude-sonnet-4"
+      }
+    }
+  }
+}
