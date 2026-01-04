@@ -1,6 +1,4 @@
 services:
-
-services:
   gh-review:
     build: .
     image: mcp-gh-reviewer:latest

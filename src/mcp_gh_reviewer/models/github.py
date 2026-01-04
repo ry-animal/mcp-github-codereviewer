@@ -6,27 +6,36 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 
-class GitHubUser(BaseModel):
-    """GitHub user representation."""
+class GitHubUserBasic(BaseModel):
+    """Minimal GitHub user (for list responses to avoid MCP secret detection)."""
 
     login: str
+
+
+class GitHubUser(GitHubUserBasic):
+    """GitHub user representation."""
+
     id: int
     avatar_url: Optional[str] = None
     html_url: Optional[str] = None
 
 
-class PullRequestHead(BaseModel):
-    """PR head/base branch info."""
+class PullRequestHeadBasic(BaseModel):
+    """PR head/base branch info without SHA (for list responses)."""
 
     ref: str
-    sha: str
     label: str
 
 
-class PullRequestFile(BaseModel):
-    """File changed in a PR."""
+class PullRequestHead(PullRequestHeadBasic):
+    """PR head/base branch info with SHA."""
 
     sha: str
+
+
+class PullRequestFile(BaseModel):
+    """File changed in a PR (excludes SHA to avoid MCP secret detection)."""
+
     filename: str
     status: Literal[
         "added", "removed", "modified", "renamed", "copied", "changed", "unchanged"
@@ -59,13 +68,13 @@ class PullRequest(BaseModel):
 
 
 class PullRequestListItem(BaseModel):
-    """Lightweight PR for listing."""
+    """Lightweight PR for listing (excludes SHA/URLs to avoid MCP secret detection)."""
 
     number: int
     title: str
     state: Literal["open", "closed"]
-    user: GitHubUser
-    head: PullRequestHead
-    base: PullRequestHead
+    user: GitHubUserBasic
+    head: PullRequestHeadBasic
+    base: PullRequestHeadBasic
     created_at: datetime
     draft: bool = False
