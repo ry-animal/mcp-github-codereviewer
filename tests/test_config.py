@@ -11,6 +11,7 @@ class TestSettings:
     def test_default_mode_is_github_com(self):
         """Default mode should be github.com."""
         settings = Settings(
+            _env_file=None,  # Isolate from .env
             github_token="test",
             openrouter_api_key="test",
         )
@@ -54,9 +55,85 @@ class TestSettings:
         )
         assert settings.ghes_hostname == "github.mycompany.com"
 
+    def test_ghes_use_pat_with_github_token(self):
+        """ghes_use_pat should be True when GHES mode has github_token."""
+        settings = Settings(
+            _env_file=None,
+            github_mode="ghes",
+            ghes_hostname="github.mycompany.com",
+            github_token="ghp_my_token",
+            openrouter_api_key="test",
+        )
+        assert settings.ghes_use_pat is True
+        assert settings.ghes_use_oauth is False
+        assert settings.effective_token == "ghp_my_token"
+
+    def test_ghes_use_pat_with_ghes_token(self):
+        """ghes_use_pat should be True when GHES mode has ghes_token."""
+        settings = Settings(
+            _env_file=None,
+            github_mode="ghes",
+            ghes_hostname="github.mycompany.com",
+            ghes_token="ghp_ghes_token",
+            openrouter_api_key="test",
+        )
+        assert settings.ghes_use_pat is True
+        assert settings.ghes_use_oauth is False
+        assert settings.effective_token == "ghp_ghes_token"
+
+    def test_ghes_token_takes_precedence(self):
+        """ghes_token should take precedence over github_token in GHES mode."""
+        settings = Settings(
+            _env_file=None,
+            github_mode="ghes",
+            ghes_hostname="github.mycompany.com",
+            github_token="ghp_github_token",
+            ghes_token="ghp_ghes_token",
+            openrouter_api_key="test",
+        )
+        assert settings.effective_token == "ghp_ghes_token"
+
+    def test_ghes_use_oauth_without_token(self):
+        """ghes_use_oauth should be True when GHES mode has no token but has OAuth creds."""
+        settings = Settings(
+            _env_file=None,
+            github_mode="ghes",
+            ghes_hostname="github.mycompany.com",
+            github_token="",
+            github_client_id="client123",
+            github_client_secret="secret456",
+            openrouter_api_key="test",
+        )
+        assert settings.ghes_use_pat is False
+        assert settings.ghes_use_oauth is True
+
+    def test_ghes_mode_without_hostname(self):
+        """GHES mode without hostname should not enable PAT or OAuth."""
+        settings = Settings(
+            _env_file=None,
+            github_mode="ghes",
+            ghes_hostname="",  # Empty hostname
+            github_token="ghp_my_token",
+            openrouter_api_key="test",
+        )
+        assert settings.ghes_use_pat is False
+        assert settings.ghes_use_oauth is False
+
+    def test_github_com_mode_not_ghes(self):
+        """github.com mode should not trigger GHES properties."""
+        settings = Settings(
+            _env_file=None,
+            github_mode="github.com",
+            github_token="ghp_my_token",
+            openrouter_api_key="test",
+        )
+        assert settings.ghes_use_pat is False
+        assert settings.ghes_use_oauth is False
+
     def test_default_review_model(self):
         """Default review model should be claude-sonnet-4."""
         settings = Settings(
+            _env_file=None,  # Isolate from .env
             github_token="test",
             openrouter_api_key="test",
         )
@@ -74,6 +151,7 @@ class TestSettings:
     def test_default_server_port(self):
         """Default server port should be 8000."""
         settings = Settings(
+            _env_file=None,  # Isolate from .env
             github_token="test",
             openrouter_api_key="test",
         )
