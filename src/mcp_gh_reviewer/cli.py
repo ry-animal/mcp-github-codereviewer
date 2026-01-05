@@ -13,38 +13,50 @@ from mcp_gh_reviewer.services.review_generator import ReviewGenerator
 from mcp_gh_reviewer.services.review_poster import ReviewPoster
 
 
-def parse_github_url(url_or_repo: str) -> tuple[str, str, int | None]:
+def parse_github_url(url_or_repo: str) -> tuple[str | None, str, str, int | None]:
     """Parse a GitHub URL or owner/repo string.
 
     Accepts:
         - https://github.com/owner/repo/pull/123
+        - https://github.mycompany.com/owner/repo/pull/123 (GHES)
         - github.com/owner/repo/pull/123
         - owner/repo/pull/123
         - owner/repo (for list command)
 
     Returns:
-        Tuple of (owner, repo, pr_number or None)
+        Tuple of (hostname or None, owner, repo, pr_number or None)
+        hostname is None for owner/repo shorthand (uses config default)
     """
     if len(url_or_repo) > 500:  # Reasonable limit for GitHub URLs
         raise ValueError(f"Input too long: {len(url_or_repo)} characters")
 
-    # Full URL pattern: https://github.com/owner/repo/pull/123
-    url_pattern = r"(?:https?://)?(?:www\.)?github\.com/([^/]+)/([^/]+)/pull/(\d+)"
-    match = re.match(url_pattern, url_or_repo)
+    # Full URL pattern: https://hostname/owner/repo/pull/123
+    # Hostname must be valid domain (e.g., github.com, github.mycompany.com)
+    hostname_pattern = r"[a-zA-Z0-9][-a-zA-Z0-9]*(?:\.[a-zA-Z0-9][-a-zA-Z0-9]*)+"
+    url_pr_pattern = rf"(?:https?://)?({hostname_pattern})/([^/]+)/([^/]+)/pull/(\d+)"
+    match = re.match(url_pr_pattern, url_or_repo)
     if match:
-        return match.group(1), match.group(2), int(match.group(3))
+        hostname = match.group(1).removeprefix("www.")
+        return hostname, match.group(2), match.group(3), int(match.group(4))
 
-    # owner/repo/pull/123 pattern
+    # Full URL pattern without PR: https://hostname/owner/repo
+    url_repo_pattern = rf"(?:https?://)?({hostname_pattern})/([^/]+)/([^/]+)/?$"
+    match = re.match(url_repo_pattern, url_or_repo)
+    if match:
+        hostname = match.group(1).removeprefix("www.")
+        return hostname, match.group(2), match.group(3), None
+
+    # owner/repo/pull/123 pattern (no hostname - use config)
     short_pr_pattern = r"([^/]+)/([^/]+)/pull/(\d+)"
     match = re.match(short_pr_pattern, url_or_repo)
     if match:
-        return match.group(1), match.group(2), int(match.group(3))
+        return None, match.group(1), match.group(2), int(match.group(3))
 
-    # owner/repo pattern (no PR number)
+    # owner/repo pattern (no PR number, no hostname)
     repo_pattern = r"([^/]+)/([^/]+)$"
     match = re.match(repo_pattern, url_or_repo)
     if match:
-        return match.group(1), match.group(2), None
+        return None, match.group(1), match.group(2), None
 
     raise ValueError(
         f"Invalid format: {url_or_repo}\n"
@@ -52,13 +64,44 @@ def parse_github_url(url_or_repo: str) -> tuple[str, str, int | None]:
     )
 
 
-async def list_prs_cmd(owner: str, repo: str, state: str = "open") -> None:
-    """List pull requests in a repository."""
-    if not settings.github_token:
-        print("Error: GitHub token not configured. Set GITHUB_TOKEN environment variable.")
-        sys.exit(1)
+def _create_github_client(hostname: str | None) -> GitHubClient:
+    """Create GitHub client for the given hostname.
 
-    client = GitHubClient(token=settings.github_token, mode="github.com")
+    Args:
+        hostname: GitHub hostname from URL, or None to use config default
+
+    Returns:
+        Configured GitHubClient
+    """
+    # Determine if this is github.com or GHES based on hostname
+    effective_hostname = hostname or (
+        "github.com" if settings.is_github_com else settings.ghes_hostname
+    )
+
+    if effective_hostname == "github.com":
+        if not settings.github_token:
+            print("Error: GitHub token not configured. Set GITHUB_TOKEN environment variable.")
+            sys.exit(1)
+        return GitHubClient(token=settings.github_token, mode="github.com")
+    else:
+        # GHES - use GHES_TOKEN if set, else GITHUB_TOKEN
+        token = settings.effective_token
+        if not token:
+            print("Error: GHES token not configured. Set GHES_TOKEN or GITHUB_TOKEN environment variable.")
+            sys.exit(1)
+        if not effective_hostname:
+            print("Error: GHES hostname not configured. Set GHES_HOSTNAME or provide full URL.")
+            sys.exit(1)
+        return GitHubClient(
+            hostname=effective_hostname,
+            token=token,
+            mode="ghes",
+        )
+
+
+async def list_prs_cmd(owner: str, repo: str, hostname: str | None, state: str = "open") -> None:
+    """List pull requests in a repository."""
+    client = _create_github_client(hostname)
     prs = await client.list_pull_requests(owner, repo, state)
 
     if not prs:
@@ -77,18 +120,16 @@ async def review_pr_cmd(
     owner: str,
     repo: str,
     pr_number: int,
+    hostname: str | None = None,
     post: bool = False,
     focus: list[str] | None = None,
 ) -> None:
     """Review a pull request with AI."""
-    if not settings.github_token:
-        print("Error: GitHub token not configured. Set GITHUB_TOKEN environment variable.")
-        sys.exit(1)
     if not settings.openrouter_api_key:
         print("Error: OpenRouter API key not configured. Set OPENROUTER_API_KEY environment variable.")
         sys.exit(1)
 
-    gh_client = GitHubClient(token=settings.github_token, mode="github.com")
+    gh_client = _create_github_client(hostname)
     ai_client = OpenRouterClient(settings.openrouter_api_key)
 
     print(f"\nFetching PR #{pr_number} from {owner}/{repo}...")
@@ -206,6 +247,9 @@ Examples:
 
   # Focus review on specific areas
   gh-review https://github.com/owner/repo/pull/123 --focus security
+
+  # GitHub Enterprise Server (GHES) - just use the full URL
+  gh-review https://github.mycompany.com/team/project/pull/42 --post
         """,
     )
 
@@ -251,14 +295,14 @@ Examples:
 
     # Parse the target
     try:
-        owner, repo, parsed_pr = parse_github_url(args.target)
+        hostname, owner, repo, parsed_pr = parse_github_url(args.target)
     except ValueError as e:
         print(f"Error: {e}")
         sys.exit(1)
 
     # Handle list command
     if args.list_prs:
-        asyncio.run(list_prs_cmd(owner, repo, args.state))
+        asyncio.run(list_prs_cmd(owner, repo, hostname, args.state))
         return
 
     # Use PR number from URL or argument
@@ -268,7 +312,7 @@ Examples:
         print("       Or use --list to list PRs in the repo.")
         sys.exit(1)
 
-    asyncio.run(review_pr_cmd(owner, repo, final_pr_number, args.post, args.focus))
+    asyncio.run(review_pr_cmd(owner, repo, final_pr_number, hostname, args.post, args.focus))
 
 
 if __name__ == "__main__":

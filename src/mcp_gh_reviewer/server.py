@@ -19,14 +19,15 @@ from mcp_gh_reviewer.services.review_poster import ReviewPoster
 
 def _create_mcp_server() -> FastMCP:
     """Create the MCP server based on configuration mode."""
-    if settings.is_github_com:
-        # github.com mode: No OAuth, uses PAT from config
+    if settings.is_github_com or settings.ghes_use_pat:
+        # github.com or GHES with PAT: No OAuth needed
+        mode = "github.com" if settings.is_github_com else f"GHES PAT ({settings.ghes_hostname})"
         return FastMCP(
             name="GitHub PR Reviewer",
-            instructions="AI-powered code review for GitHub PRs (github.com mode)",
+            instructions=f"AI-powered code review for GitHub PRs ({mode})",
         )
-    else:
-        # GHES mode: Use OAuth
+    elif settings.ghes_use_oauth:
+        # GHES mode with OAuth
         from mcp_gh_reviewer.auth.ghes_provider import GHESProvider
 
         auth_provider = GHESProvider(
@@ -37,8 +38,13 @@ def _create_mcp_server() -> FastMCP:
         )
         return FastMCP(
             name="GitHub PR Reviewer",
-            instructions="AI-powered code review for GitHub Enterprise Server PRs",
+            instructions="AI-powered code review for GitHub Enterprise Server PRs (OAuth)",
             auth=auth_provider,
+        )
+    else:
+        raise ValueError(
+            "GHES mode requires either GITHUB_TOKEN (PAT) or "
+            "GITHUB_CLIENT_ID + GITHUB_CLIENT_SECRET (OAuth)"
         )
 
 
@@ -49,13 +55,22 @@ mcp = _create_mcp_server()
 def _get_github_client(ctx: Optional[Context]) -> GitHubClient:
     """Create a GitHub client based on mode and context."""
     if settings.is_github_com:
-        # Use PAT from settings
+        # github.com with PAT
         return GitHubClient(
             token=settings.github_token,
             mode="github.com",
         )
+    elif settings.ghes_use_pat:
+        # GHES with PAT (uses GHES_TOKEN if set, else GITHUB_TOKEN)
+        if not settings.ghes_hostname:
+            raise ValueError("GHES mode requires GHES_HOSTNAME to be set")
+        return GitHubClient(
+            hostname=settings.ghes_hostname,
+            token=settings.effective_token,
+            mode="ghes",
+        )
     else:
-        # Use OAuth token from context for GHES
+        # GHES with OAuth - get token from context
         token = None
         if ctx is not None:
             try:

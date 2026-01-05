@@ -18,11 +18,13 @@ class Settings(BaseSettings):
     # GitHub mode: "github.com" or "ghes"
     github_mode: Literal["github.com", "ghes"] = "github.com"
 
-    # For github.com (PAT mode)
-    github_token: str = ""  # Personal Access Token
+    # Personal Access Token for github.com
+    github_token: str = ""
 
-    # For GHES (OAuth mode)
-    ghes_hostname: str = "github.example.com"
+    # For GHES mode
+    ghes_hostname: str = ""  # e.g., "github.mycompany.com"
+    ghes_token: str = ""  # PAT for GHES (falls back to github_token if not set)
+    # OAuth credentials (optional - only needed if not using PAT)
     github_client_id: str = ""
     github_client_secret: str = ""
 
@@ -43,6 +45,27 @@ class Settings(BaseSettings):
     def is_ghes(self) -> bool:
         """Check if using GHES mode."""
         return self.github_mode == "ghes"
+
+    @property
+    def effective_token(self) -> str:
+        """Get the effective token for the current mode.
+
+        For GHES: returns ghes_token if set, otherwise github_token.
+        For github.com: returns github_token.
+        """
+        if self.is_ghes:
+            return self.ghes_token or self.github_token
+        return self.github_token
+
+    @property
+    def ghes_use_pat(self) -> bool:
+        """Check if GHES mode should use PAT instead of OAuth."""
+        return self.is_ghes and bool(self.ghes_hostname) and bool(self.ghes_token or self.github_token)
+
+    @property
+    def ghes_use_oauth(self) -> bool:
+        """Check if GHES mode should use OAuth."""
+        return self.is_ghes and bool(self.ghes_hostname) and not (self.ghes_token or self.github_token) and bool(self.github_client_id)
 
 
 @lru_cache
